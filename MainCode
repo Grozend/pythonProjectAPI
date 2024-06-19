@@ -1,0 +1,52 @@
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from databases import Database
+import sqlite3
+
+app = FastAPI()
+
+database = Database("sqlite:///mydatabase.db")
+
+async def create_table():
+    query = "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)"
+    await database.execute(query=query)
+
+class User(BaseModel):
+    name: str
+    email: str
+
+@app.get("/users")
+async def get_users():
+    query = "SELECT * FROM users"
+    rows = await database.fetch_all(query)
+    return rows
+
+@app.post("/user")
+async def create_user(user: User):
+    query = "INSERT INTO users (name, email) VALUES (:name, :email)"
+    values = {"name": user.name, "email": user.email}
+    await database.execute(query=query, values=values)
+    return {"status": "user created successfully"}
+
+@app.put("/user/{user_id}")
+async def update_user(user_id: int, user: User):
+    query = "UPDATE users SET name = :name, email = :email WHERE id = :id"
+    values = {"id": user_id, "name": user.name, "email": user.email}
+    await database.execute(query=query, values=values)
+    return {"status": "user updated successfully"}
+
+@app.delete("/user/{user_id}")
+async def delete_user(user_id: int):
+    query = "DELETE FROM users WHERE id = :id"
+    values = {"id": user_id}
+    await database.execute(query=query, values=values)
+    return {"status": "user deleted successfully"}
+
+@app.on_event("startup")
+async def startup():
+    await database.connect()
+    await create_table()
+
+@app.on_event("shutdown")
+async def shutdown():
+    await database.disconnect()
